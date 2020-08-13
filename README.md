@@ -1,33 +1,34 @@
-django-ipfs-storage
-===================
+# django-ipfs-storage
 
-Store [Django file-uploads](https://docs.djangoproject.com/en/1.11/topics/files/)
-on the [Interplanetary File System](https://ipfs.io/).
+## Updating Note
 
-Uploads are added and pinned to the configured IPFS node,
-which returns the IPFS Content ID (a hash of the contents).
-This hash is the name that is saved to your database.
-Duplicate content will also have the same address,
-saving disk space.
+This update is based on the original code by [jeffbr13](https://github.com/jeffbr13/django-ipfs-storage), since it has not been maintained for years.
+
+Major updates include:
+
+1. Make it compatible to latest Python client of IPFS (0.6.0, up to present).
+2. Based on Django-Storage, thread-safe connection is introduced.
+3. The class name is changed into `IPFSStorage` for succinct.
+
+-------
+
+
+Store [Django file-uploads](https://docs.djangoproject.com/en/1.11/topics/files/) on the [Interplanetary File System](https://ipfs.io/).
+
+Uploads are added and pinned to the configured IPFS node, which returns the IPFS Content ID (a hash of the contents). This hash is the name that is saved to your database. Duplicate content will also have the same address, saving disk space.
 
 Because of this only file creation and reading is supported.
 
-Other IPFS users access and reseed a piece of content 
-through its unique content ID.
-Differently-distributed (i.e. normal HTTP) users
-can access the uploads through an HTTP→IPFS gateway.
+Other IPFS users access and reseed a piece of content through its unique content ID. Differently-distributed (i.e. normal HTTP) users can access the uploads through an HTTP→IPFS gateway.
 
-
-Installation
-------------
+## Installation
 
 ```bash
 pip install django-ipfs-storage
 ```
 
 
-Configuration
--------------
+## Configuration
 
 By default `ipfs_storage` adds and pins content to an IPFS daemon running on localhost
 and returns URLs pointing to the public <https://ipfs.io/ipfs/> HTTP Gateway
@@ -40,9 +41,7 @@ To customise this, set the following variables in your `settings.py`:
 Set `IPFS_GATEWAY_API_URL` to `'http://localhost:8080/ipfs/'` to serve content
 through your local daemon's HTTP gateway.
 
-
-Usage
------
+## Usage
 
 There are two ways to use a Django storage backend.
 
@@ -58,7 +57,6 @@ DEFAULT_FILE_STORAGE = 'ipfs_storage.InterPlanetaryFileSystemStorage'
 IPFS_STORAGE_API_URL = 'http://localhost:5001/api/v0/'
 IPFS_STORAGE_GATEWAY_URL = 'http://localhost:8080/ipfs/'
 ```  
-
 
 ### For a specific FileField
 
@@ -79,8 +77,7 @@ class MyModel(models.Model):
 Don't forget the brackets to instantiate `InterPlanetaryFileSystemStorage()` with the default arguments!
 
 
-FAQ
----
+## FAQ
 
 ### Why IPFS?
 
