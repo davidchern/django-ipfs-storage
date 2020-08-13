@@ -1,58 +1,54 @@
-from urllib.parse import urlparse
+# updated: 2020/08/12
+# author: jeffbr13
+# author: davidchern
+import threading
+
+import ipfshttpclient
 
 from django.conf import settings
-from django.core.files.base import File, ContentFile
+from django.core.files.base import ContentFile
 from django.core.files.storage import Storage
 from django.utils.deconstruct import deconstructible
-import ipfsapi
 
-
-__version__ = '0.0.4'
+__version__ = '0.1.0'
 
 
 @deconstructible
-class InterPlanetaryFileSystemStorage(Storage):
-    """IPFS Django storage backend.
-
-    Only file creation and reading is supported
-    due to the nature of the IPFS protocol.
-    """
+class IPFSStorage(Storage):
 
     def __init__(self, api_url=None, gateway_url=None):
-        """Connect to Interplanetary File System daemon API to add/pin files.
-
-        :param api_url: IPFS control API base URL.
-                        Also configurable via `settings.IPFS_STORAGE_API_URL`.
-                        Defaults to 'http://localhost:5001/api/v0/'.
-        :param gateway_url: Base URL for IPFS Gateway (for HTTP-only clients).
-                            Also configurable via `settings.IPFS_STORAGE_GATEWAY_URL`.
-                            Defaults to 'https://ipfs.io/ipfs/'.
-        """
-        parsed_api_url = urlparse(api_url or getattr(settings, 'IPFS_STORAGE_API_URL', 'http://localhost:5001/api/v0/'))
-        self._ipfs_client = ipfsapi.connect(
-            parsed_api_url.hostname,
-            parsed_api_url.port,
-            parsed_api_url.path.strip('/')
+        self.ipfs_api_url = api_url or getattr(
+            settings, 'IPFS_STORAGE_API_URL', '/ip4/127.0.0.1/tcp/5001/http'
         )
-        self.gateway_url = gateway_url or getattr(settings, 'IPFS_STORAGE_GATEWAY_URL', 'https://ipfs.io/ipfs/')
+        self.gateway_url = gateway_url or getattr(
+            settings, 'IPFS_STORAGE_GATEWAY_URL', 'https://ipfs.io/ipfs/'
+        )
+        self._connections = threading.local()
 
-    def _open(self, name: str, mode='rb') -> File:
-        """Retrieve the file content identified by multihash.
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state.pop('_connections', None)
+        return state
 
-        :param name: IPFS Content ID multihash.
-        :param mode: Ignored. The returned File instance is read-only.
-        """
-        return ContentFile(self._ipfs_client.cat(name), name=name)
+    def __setstate__(self, state):
+        state['_connections'] = threading.local()
+        self.__dict__ = state
 
-    def _save(self, name: str, content: File) -> str:
-        """Add and pin content to IPFS daemon.
+    @property
+    def connection(self):
+        connection = getattr(self._connections, 'connection', None)
+        if connection is None:
+            self._connections.connection = ipfshttpclient.connect(
+                self.ipfs_api_url
+            )
+        return self._connections.connection
 
-        :param name: Ignored. Provided to comply with `Storage` interface.
-        :param content: Django File instance to save.
-        :return: IPFS Content ID multihash.
-        """
-        multihash = self._ipfs_client.add_bytes(content.__iter__())
-        self._ipfs_client.pin_add(multihash)
+    def _open(self, name, mode='rb'):
+        return ContentFile(self.connection.cat(name), name=name)
+
+    def _save(self, name, content):
+        multihash = self.connection.add_bytes(content.__iter__())
+        self.connection.pin.add(multihash)
         return multihash
 
     def get_valid_name(self, name):
@@ -63,20 +59,14 @@ class InterPlanetaryFileSystemStorage(Storage):
         """Returns name. Only provided for compatibility with Storage interface."""
         return name
 
-    def size(self, name: str) -> int:
+    def size(self, name):
         """Total size, in bytes, of IPFS content with multihash `name`."""
-        return self._ipfs_client.object_stat(name)['CumulativeSize']
+        return self.connection.object.stat(name)['CumulativeSize']
 
-    def delete(self, name: str):
+    def delete(self, name):
         """Unpin IPFS content from the daemon."""
-        self._ipfs_client.pin_rm(name)
+        self.connection.pin.rm(name)
 
-    def url(self, name: str):
-        """Returns an HTTP-accessible Gateway URL by default.
-
-        Override this if you want direct `ipfs://…` URLs or something.
-
-        :param name: IPFS Content ID multihash.
-        :return: HTTP URL to access the content via an IPFS HTTP Gateway.
-        """
-        return '{gateway_url}{multihash}'.format(gateway_url=self.gateway_url, multihash=name)
+    def url(self, name):
+        return '{gateway_url}{multihash}'.format(gateway_url=self.gateway_url,
+                                                 multihash=name)
